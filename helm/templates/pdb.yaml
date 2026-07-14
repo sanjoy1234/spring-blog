@@ -1,0 +1,8 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: spring-blog
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: spring-blog}

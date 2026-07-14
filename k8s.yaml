@@ -1,0 +1,127 @@
+---
+# Source: spring-blog/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spring-blog
+spec:
+  podSelector:
+    matchLabels: {app: spring-blog}
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - namespaceSelector: {}
+---
+# Source: spring-blog/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: spring-blog
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: spring-blog}
+---
+# Source: spring-blog/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: spring-blog-services
+type: Opaque
+stringData:
+  SERVICE_BINDINGS: "{}"
+---
+# Source: spring-blog/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spring-blog-config
+data:
+  APP_ID: spring-blog
+  PORT: "8080"
+---
+# Source: spring-blog/templates/deployment.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: spring-blog
+spec:
+  type: ClusterIP
+  selector: {app: spring-blog}
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+---
+# Source: spring-blog/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spring-blog
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: spring-blog}
+  template:
+    metadata:
+      labels: {app: spring-blog}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: app
+        image: us-central1-docker.pkg.dev/MigrationFactory-migration-demo/MigrationFactory/spring-blog:phase-b
+        ports:
+        - name: http
+          containerPort: 8080
+        envFrom:
+        - configMapRef: {name: spring-blog-config}
+        - secretRef: {name: spring-blog-services}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: {drop: [ALL]}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          limits:
+            cpu: 300m
+            memory: 384Mi
+          requests:
+            cpu: 25m
+            memory: 64Mi
+        readinessProbe:
+          tcpSocket: {port: 8080}
+          initialDelaySeconds: 10
+        livenessProbe:
+          tcpSocket: {port: 8080}
+          initialDelaySeconds: 30
+      volumes:
+      - name: tmp
+        emptyDir: {}
+---
+# Source: spring-blog/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: spring-blog
+spec:
+  minReplicas: 1
+  maxReplicas: 2
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: spring-blog
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
