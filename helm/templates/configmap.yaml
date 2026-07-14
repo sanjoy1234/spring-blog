@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spring-blog-config
+data:
+  APP_ID: spring-blog
+  PORT: "8080"
